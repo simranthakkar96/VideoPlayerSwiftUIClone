@@ -5,38 +5,28 @@
 //  Created by Michael Gauthier on 2021-01-06.
 //
 
+
 import SwiftUI
 import AVKit
 import Alamofire
+import SwiftyJSON
 
-
-class Host: UIHostingController<ContentView>
-{
-        override var preferredStatusBarStyle: UIStatusBarStyle
-        {
-            return .lightContent
-        }
-}
-
+//View for the Video and Description in vertical stack
 struct ContentView: View {
+    //Variables intialized
+    @State var player = AVPlayer(url:URL(string: "https://d140vvwqovffrf.cloudfront.net/media/5e852de33c8e4/hls/index.m3u8")!)
     
-    // Initilization of the variable
-    @State var player = AVPlayer(url: URL(string: "https://wolverine.raywenderlich.com/content/ios/tutorials/video_streaming/foxVillage.mp4")!)
-    @State var Playing = false
+    @State var playing = false
     @State var showcontrols = false
-     
+    @ObservedObject var observed = values()
     
     var body: some View {
-        // using vertical stack to vertically align the components on screen
-        VStack
-        {
-            // to set the controls on the video uding Z-axis
-            ZStack
-            {
+        VStack{
+            // The controls are define in zstack as we need to mount the controls on video
+            ZStack{
                 VideoPlayer(player: $player)
-                if self.showcontrols
-                {
-                    VideoControls(player: self.$player, playing: self.$Playing, showcontrols: self.$showcontrols)
+                if self.showcontrols{
+                    Controls(player: self.$player, playing: self.$playing, showcontrols: self.$showcontrols)
                 }
             }
             .frame(height: UIScreen.main.bounds.height/3.5)
@@ -44,44 +34,53 @@ struct ContentView: View {
                 self.showcontrols = true
             }
             
-            // Using GemoetryReader to set the size of frame
-            // Aliging of the frame can be done in center, topLeading, topTraling, bottomLeading, bottomTrailing
-            GeometryReader{ geometry in
-            VStack(spacing: 20)
-            {
-                ScrollView(.vertical) {
-                    
-                        Text("Hello").foregroundColor(.white)
-                }
+            //Gemorty reader is used to chanhge the size and alignment of the text
+            GeometryReader{geometry in
+                VStack(){
+                    ScrollView(.vertical){
+                        // called the data from json array using the observed instance
+                        Text(observed.jsondata.description).foregroundColor(.white)
+                            
+                   
+                    }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             }
+            
         }
         .background(Color.black.edgesIgnoringSafeArea(.all))
- 
+        //below at first its made false so the user will get pause at first run of the application
+        .onAppear(){
+            self.playing = false
+        }
     }
 }
 
-// Structure for creating Controls on the video
-struct VideoControls: View{
-    // Setting datatypes of the variables
-    @Binding var player: AVPlayer
-    @Binding var playing: Bool
-    @Binding var showcontrols: Bool
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
+}
+
+//Controls in the video are intiated and its functionalities are added
+struct Controls : View{
     
-    var body: some View
-    {
+    @Binding var player : AVPlayer
+    @Binding var playing : Bool
+    @Binding var showcontrols : Bool
+    var body : some View{
         VStack{
             Spacer()
             HStack{
-                Button(action: {})
-                    {
-                    Image(systemName: "backward.fill")
-                        .font(/*@START_MENU_TOKEN@*/.title/*@END_MENU_TOKEN@*/)
+                Button(action: {
+                    
+                }){
+                    Image(uiImage: UIImage(named: "previous")!).font(.title)
                         .foregroundColor(.white)
+                        .padding(20)
                 }
                 
                 Spacer()
+                
                 Button(action: {
                     if self.playing{
                         self.player.pause()
@@ -91,33 +90,34 @@ struct VideoControls: View{
                         self.player.play()
                         self.playing = true
                     }
-                })
-                    {
-                    Image(systemName: self.playing ? "pause.fill" : "play.fill")
-                        .font(/*@START_MENU_TOKEN@*/.title/*@END_MENU_TOKEN@*/)
+                }){
+                    Image(uiImage: UIImage(named: self.playing ? "pause": "play")!).font(.title)
                         .foregroundColor(.white)
+                        .padding(20)
                 }
-                
                 Spacer()
-                Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/)
-                    {
-                    Image(systemName: "forward.fill")
-                        .font(/*@START_MENU_TOKEN@*/.title/*@END_MENU_TOKEN@*/)
+                Button(action: {
+                    
+                }){
+                    Image(uiImage: UIImage(named: "next")!).font(.title)
                         .foregroundColor(.white)
+                        .padding(20)
                 }
             }
-            Spacer( )
+            Spacer()
+            
         }.padding()
+        .background(Color.black.opacity(0.4))
         .onTapGesture {
             self.showcontrols = false
         }
     }
 }
 
-//Crating the AVPlayer instance and using it in the contentview
-struct VideoPlayer : UIViewControllerRepresentable
-{
-    @Binding var player: AVPlayer
+//Video Player Controller
+struct VideoPlayer : UIViewControllerRepresentable {
+    
+    @Binding var player : AVPlayer
     
     func makeUIViewController(context: UIViewControllerRepresentableContext<VideoPlayer>) -> AVPlayerViewController {
         
@@ -128,48 +128,30 @@ struct VideoPlayer : UIViewControllerRepresentable
         return controller
     }
     
-    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: UIViewControllerRepresentableContext<VideoPlayer>) {
+        
         
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+// Connecting to the server using JSON Parsing and then appending the data to the initvalues struct created below
+class values: ObservableObject{
+    @Published var jsondata = [initvalues]()
+    init(){
+        Alamofire.request("http://localhost:4000/videos").responseData{
+            (data) in
+            let json = try! JSON(data:data.data!)
+            for i in json{
+                self.jsondata.append(initvalues(id: i.1["id"].intValue, title: i.1["title"].stringValue, description: i.1["description"].stringValue, hlsURL: i.1["hlsURL"].stringValue))
+            }
+        }
     }
 }
-
-//class datas: ObservableObject
-//{
-//
-//    @Published var jsonData = [dataType]()
-//
-//    init()
-//    {
-//        let session = URLSession(configuration: .default)
-//
-//        session.dataTask(with: URL(string: "http://localhost:4000/videos")!) { (data, _, _) in
-//            do{
-//                let fetch = try JSONDecoder().decode([dataType].self, from: data!)
-//                DispatchQueue.main.async {
-//                    self.jsonData = fetch
-//                }
-//            }
-//            catch{
-//                print(error.localizedDescription)
-//            }
-//        }.resume()
-//    }
-//
-//
-//}
-
-//struct dataType: Identifiable,Decodable
-//{
-//    var id: Int
-//    var title: String
-//    var full_url: String
-//    var description: String
-//}
+struct initvalues: Identifiable, Decodable{
+    var id: Int
+    var title: String
+    var description: String
+    var hlsURL: String
+}
 
 
